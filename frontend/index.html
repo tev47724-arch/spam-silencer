@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spam Silencer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section class="phone" aria-label="Text message spam blocker">
+      <header class="phone-top">
+        <div>
+          <p class="eyebrow">Spam Silencer</p>
+          <h1>Messages</h1>
+        </div>
+        <button class="icon-button active" id="protectionToggle" type="button" aria-pressed="true" aria-label="Protection on" title="Protection on">
+          <span aria-hidden="true">P</span>
+        </button>
+      </header>
+
+      <section class="composer" aria-label="Scan a message">
+        <label for="messageInput">New text</label>
+        <textarea id="messageInput" rows="4" spellcheck="true">URGENT: Your package delivery is on hold. Tap http://parcel-verify-now.example to avoid return fees.</textarea>
+        <div class="composer-actions">
+          <input id="senderInput" type="text" value="+1 (888) 410-7741" aria-label="Sender">
+          <button id="scanButton" type="button">Scan</button>
+        </div>
+      </section>
+
+      <section class="verdict" id="verdictCard" aria-live="polite">
+        <div class="meter" aria-hidden="true"><span id="riskBar"></span></div>
+        <div>
+          <p id="riskLabel">Likely spam</p>
+          <strong id="riskScore">91%</strong>
+        </div>
+        <button id="blockCurrentButton" type="button">Block</button>
+      </section>
+
+      <nav class="tabs" aria-label="Message views">
+        <button class="tab active" data-tab="inbox" type="button">Inbox</button>
+        <button class="tab" data-tab="muted" type="button">Muted</button>
+        <button class="tab" data-tab="rules" type="button">Rules</button>
+      </nav>
+
+      <section class="panel active" id="inboxPanel" aria-label="Inbox">
+        <div class="list" id="inboxList"></div>
+      </section>
+
+      <section class="panel" id="mutedPanel" aria-label="Muted messages">
+        <div class="list" id="mutedList"></div>
+      </section>
+
+      <section class="panel" id="rulesPanel" aria-label="Blocking rules">
+        <div class="rule-grid" id="rulesList"></div>
+      </section>
+    </section>
+
+    <aside class="dashboard" aria-label="Protection summary">
+      <div class="brand-visual" aria-hidden="true">
+        <div class="shield">
+          <span></span>
+        </div>
+        <div class="signal signal-a"></div>
+        <div class="signal signal-b"></div>
+        <div class="signal signal-c"></div>
+      </div>
+
+      <section class="stats">
+        <article>
+          <span id="blockedCount">0</span>
+          <p>Blocked</p>
+        </article>
+        <article>
+          <span id="cleanCount">0</span>
+          <p>Allowed</p>
+        </article>
+        <article>
+          <span id="ruleCount">0</span>
+          <p>Rules</p>
+        </article>
+      </section>
+
+      <section class="queue" aria-label="Live filter">
+        <header>
+          <h2>Live filter</h2>
+          <span id="filterState">On</span>
+        </header>
+        <div id="activityFeed"></div>
+      </section>
+    </aside>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
