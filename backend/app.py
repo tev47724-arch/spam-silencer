@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -19,11 +20,23 @@ contacts = {
     "+1 (717) 555-1234"
 }
 
-spam_signals = [
-    "urgent", "tap", "verify", "delivery", "package",
-    "refund", "prize", "gift", "crypto", "password",
-    "account", "fee", "http", "winner", "claim"
-]
+spam_signals = {
+    "urgent": 8,
+    "verify": 10,
+    "password": 12,
+    "account": 8,
+    "winner": 14,
+    "claim": 10,
+    "prize": 12,
+    "refund": 9,
+    "gift": 8,
+    "gift card": 16,
+    "crypto": 14,
+    "fee": 8,
+    "package": 6,
+    "delivery": 5,
+    "tap": 6
+}
 
 
 @app.route("/")
@@ -31,32 +44,67 @@ def home():
     return "Spam Silencer Python Backend Running"
 
 
+def normalize_phone(value):
+    return re.sub(r"\D", "", value)
+
+
+def is_contact(sender):
+    sender_clean = sender.strip().lower()
+    sender_digits = normalize_phone(sender)
+
+    for contact in contacts:
+        contact_clean = contact.strip().lower()
+        contact_digits = normalize_phone(contact)
+
+        if sender_clean == contact_clean:
+            return True
+
+        if sender_digits and contact_digits and sender_digits == contact_digits:
+            return True
+
+    return False
+
+
 def local_score(sender, body):
     text = f"{sender} {body}".lower()
     score = 0
     hits = []
 
-    if sender in contacts:
-        return 0, ["existing contact"]
+    trusted_contact = is_contact(sender)
 
-    for word in spam_signals:
+    if trusted_contact:
+        score -= 25
+        hits.append("known contact")
+
+    for word, points in spam_signals.items():
         if word in text:
-            score += 7
+            score += points
             hits.append(word)
 
     if "http://" in text or "https://" in text:
-        score += 18
-        hits.append("link")
+        score += 22
+        hits.append("suspicious link")
 
     if any(word in text for word in ["now", "immediately", "final notice", "avoid", "prevent"]):
-        score += 12
+        score += 14
         hits.append("pressure language")
 
     if "$" in text or "gift card" in text:
-        score += 13
+        score += 18
         hits.append("money bait")
 
-    return min(score, 99), hits
+    if any(word in text for word in ["bank", "login", "locked", "suspended", "unusual activity"]):
+        score += 16
+        hits.append("account security warning")
+
+    if any(word in text for word in ["ssn", "social security", "credit card", "routing number"]):
+        score += 25
+        hits.append("sensitive information request")
+
+    if trusted_contact:
+        score = min(score, 45)
+
+    return max(0, min(score, 99)), hits
 
 
 def llm_score(sender, body):
@@ -74,6 +122,10 @@ Return only JSON like this:
   "score": 0-99,
   "reason": "short reason"
 }}
+
+Rules:
+- If the sender is a known contact, the score should usually be low unless the message is clearly dangerous.
+- Links, money bait, account verification, pressure language, and requests for personal information should raise the score.
 """
 
     response = client.chat.completions.create(
@@ -85,7 +137,8 @@ Return only JSON like this:
         temperature=0
     )
 
-    text = response.choices[0].message.content
+    text = response.choices[0].message.content.strip()
+    text = text.replace("```json", "").replace("```", "").strip()
     return json.loads(text)
 
 
@@ -97,24 +150,25 @@ def check_spam():
     body = data.get("body", "")
 
     local_result_score, hits = local_score(sender, body)
-
-    if sender in contacts:
-        return jsonify({
-            "spam": False,
-            "score": 0,
-            "reason": "Sender is in contacts",
-            "hits": hits
-        })
+    trusted_contact = is_contact(sender)
 
     try:
         ai_result = llm_score(sender, body)
-        final_score = max(local_result_score, ai_result["score"])
+        ai_score = int(ai_result.get("score", 0))
+
+        if trusted_contact:
+            final_score = min(max(local_result_score, ai_score - 25), 45)
+            reason = "Sender is in contacts, so risk was lowered. " + ai_result.get("reason", "")
+        else:
+            final_score = max(local_result_score, ai_score)
+            reason = ai_result.get("reason", "Analyzed message for spam risk.")
 
         return jsonify({
             "spam": final_score >= 70,
             "score": final_score,
-            "reason": ai_result["reason"],
-            "hits": hits
+            "reason": reason,
+            "hits": hits,
+            "trustedContact": trusted_contact
         })
 
     except Exception as e:
@@ -123,6 +177,7 @@ def check_spam():
             "score": local_result_score,
             "reason": "Used local spam rules because AI failed",
             "hits": hits,
+            "trustedContact": trusted_contact,
             "error": str(e)
         })
 
